@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>사내 업무 AI 챗봇</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 800px;
+            height: 90vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .chat-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message.assistant {
+            justify-content: flex-start;
+        }
+
+        .message-bubble {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            line-height: 1.5;
+        }
+
+        .message.user .message-bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.assistant .message-bubble {
+            background: white;
+            color: #333;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .input-area input:focus {
+            border-color: #667eea;
+        }
+
+        .input-area button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .input-area button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .input-area button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .status-message {
+            text-align: center;
+            padding: 10px;
+            margin: 10px 20px;
+            border-radius: 8px;
+            font-size: 12px;
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .status-message.error {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .status-message.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 사내 업무 AI 챗봇</h1>
+            <p style="font-size: 14px; opacity: 0.9;">사내 게시판 정보를 참고하여 답변합니다</p>
+            <div class="header-buttons">
+                <button class="btn" onclick="refreshBoard()">게시판 새로고침</button>
+                <button class="btn" onclick="clearHistory()">대화 초기화</button>
+            </div>
+        </div>
+        <div id="status-message"></div>
+        <div class="chat-area" id="chat-area">
+            <div class="message assistant">
+                <div class="message-bubble">
+                    안녕하세요! 사내 업무 관련 질문을 해주세요. 게시판 정보를 참고하여 답변드리겠습니다. 😊
+                </div>
+            </div>
+        </div>
+        <div class="input-area">
+            <input 
+                type="text" 
+                id="user-input" 
+                placeholder="질문을 입력하세요..."
+                onkeypress="handleKeyPress(event)"
+            >
+            <button id="send-btn" onclick="sendMessage()">전송</button>
+        </div>
+    </div>
+
+    <script>
+        const chatArea = document.getElementById('chat-area');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const statusMessage = document.getElementById('status-message');
+
+        function showStatus(message, type = 'info') {
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message ${type}`;
+            statusMessage.style.display = 'block';
+            setTimeout(() => {
+                statusMessage.style.display = 'none';
+            }, 3000);
+        }
+
+        function addMessage(text, isUser) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
+            
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            bubble.textContent = text;
+            
+            messageDiv.appendChild(bubble);
+            chatArea.appendChild(messageDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function addLoadingMessage() {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message assistant';
+            messageDiv.id = 'loading-message';
+            
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            bubble.innerHTML = '<div class="loading"></div>';
+            
+            messageDiv.appendChild(bubble);
+            chatArea.appendChild(messageDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function removeLoadingMessage() {
+            const loadingMsg = document.getElementById('loading-message');
+            if (loadingMsg) {
+                loadingMsg.remove();
+            }
+        }
+
+        async function sendMessage() {
+            const message = userInput.value.trim();
+            if (!message) return;
+
+            // 사용자 메시지 표시
+            addMessage(message, true);
+            userInput.value = '';
+            sendBtn.disabled = true;
+            sendBtn.textContent = '전송 중...';
+
+            // 로딩 표시
+            addLoadingMessage();
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+
+                const data = await response.json();
+                removeLoadingMessage();
+
+                if (data.success) {
+                    addMessage(data.response, false);
+                } else {
+                    addMessage('죄송합니다. 오류가 발생했습니다: ' + (data.error || '알 수 없는 오류'), false);
+                    showStatus('응답 생성 중 오류가 발생했습니다.', 'error');
+                }
+            } catch (error) {
+                removeLoadingMessage();
+                addMessage('네트워크 오류가 발생했습니다. 다시 시도해주세요.', false);
+                showStatus('네트워크 오류: ' + error.message, 'error');
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.textContent = '전송';
+                userInput.focus();
+            }
+        }
+
+        async function refreshBoard() {
+            sendBtn.disabled = true;
+            showStatus('게시판 정보를 새로고침하는 중...', 'info');
+
+            try {
+                const response = await fetch('/api/refresh-board', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showStatus(data.message, 'success');
+                } else {
+                    showStatus(data.message || '게시판 새로고침에 실패했습니다.', 'error');
+                }
+            } catch (error) {
+                showStatus('게시판 새로고침 중 오류가 발생했습니다.', 'error');
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+
+        async function clearHistory() {
+            if (!confirm('대화 기록을 초기화하시겠습니까?')) return;
+
+            try {
+                const response = await fetch('/api/clear-history', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    chatArea.innerHTML = `
+                        <div class="message assistant">
+                            <div class="message-bubble">
+                                대화 기록이 초기화되었습니다. 새로운 질문을 해주세요! 😊
+                            </div>
+                        </div>
+                    `;
+                    showStatus('대화 기록이 초기화되었습니다.', 'success');
+                } else {
+                    showStatus('대화 기록 초기화에 실패했습니다.', 'error');
+                }
+            } catch (error) {
+                showStatus('대화 기록 초기화 중 오류가 발생했습니다.', 'error');
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        // 페이지 로드 시 입력 필드에 포커스
+        userInput.focus();
+    </script>
+</body>
+</html>
+
