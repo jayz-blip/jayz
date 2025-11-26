@@ -1,0 +1,10 @@
+{
+  "build": {
+    "command": "",
+    "output": "templates"
+  },
+  "functions": {
+    "directory": "functions"
+  }
+}
+

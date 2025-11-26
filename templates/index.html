@@ -293,7 +293,11 @@
             addLoadingMessage();
 
             try {
-                const response = await fetch('/api/chat', {
+                // Cloudflare Pages Functions 경로 사용
+                const apiPath = window.location.hostname.includes('pages.dev') 
+                    ? '/api/chat' 
+                    : '/api/chat';
+                const response = await fetch(apiPath, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
