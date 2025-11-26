@@ -28,19 +28,26 @@
 배포가 완료되면 자동으로 URL이 생성됩니다:
 - 프로덕션: `https://jayz-cid.pages.dev` (또는 설정한 커스텀 도메인)
 
-## 5. 기능 제한사항
+## 5. CSV 데이터 변환
 
-⚠️ **중요**: Cloudflare Pages Functions는 파일 시스템에 직접 접근할 수 없으므로:
-- CSV 파일 읽기 불가
-- 현재는 기본 OpenAI 챗봇만 동작 (CSV 데이터 없이)
-- CSV 데이터를 사용하려면 JSON으로 변환하여 Functions에 포함하거나, 다른 배포 플랫폼 사용 권장
+배포 전에 CSV 데이터를 JSON으로 변환해야 합니다:
 
-## 6. CSV 데이터 포함 방법 (선택사항)
+```bash
+python convert_csv_to_json.py
+```
 
-CSV 데이터를 사용하려면:
-1. CSV를 JSON으로 변환
-2. `functions/data.json`에 저장
-3. Functions에서 JSON 파일 읽기
+이 스크립트는:
+- `20251125_PPM학습용데이터_원글.csv` → `public/data/posts.json`
+- `20251125_PPM학습용데이터_댓글.csv` → `public/data/comments.json`
+- 인덱스 데이터 → `public/data/indexed.json`
 
-또는 Railway, Render 등 다른 플랫폼 사용을 권장합니다.
+변환된 JSON 파일은 자동으로 배포에 포함됩니다.
+
+## 6. 빌드 명령 (선택사항)
+
+Cloudflare Pages 빌드 설정에서 빌드 명령을 추가할 수 있습니다:
+
+- **Build command**: `python convert_csv_to_json.py` (Python이 설치된 경우)
+
+또는 로컬에서 변환 후 커밋/푸시하세요.
 

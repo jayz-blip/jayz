@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "AI 챗봇 웹 애플리케이션",
   "scripts": {
-    "build": "echo 'No build step required for static site'"
+    "build": "python convert_csv_to_json.py",
+    "prebuild": "python convert_csv_to_json.py"
   }
 }
-
