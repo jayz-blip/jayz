@@ -1,6 +1,6 @@
 # 사내 업무 AI 챗봇
 
-사내 게시판(ppm.malgn.co.kr)의 정보를 참조하여 업무 관련 질문에 답변하는 AI 챗봇입니다.
+CSV 데이터를 기반으로 업무 관련 질문에 답변하는 AI 챗봇입니다.
 
 ## 설치 방법
 
@@ -14,10 +14,13 @@ pip install -r requirements.txt
 
 ```
 OPENAI_API_KEY=your_api_key_here
-BOARD_URL=https://ppm.malgn.co.kr/
-BOARD_EMAIL=your_email@malgnsoft.com
-BOARD_PASSWORD=your_password
 ```
+
+## CSV 데이터 파일
+
+프로젝트 루트에 다음 CSV 파일이 필요합니다:
+- `20251125_PPM학습용데이터_원글.csv` - 게시글 데이터
+- `20251125_PPM학습용데이터_댓글.csv` - 댓글 데이터
 
 ## 실행 방법
 
@@ -29,6 +32,8 @@ python app.py
 
 ## 기능
 
-- 사내 게시판 로그인 및 게시글 수집
+- CSV 파일에서 게시글 및 댓글 데이터 로드
 - OpenAI GPT를 활용한 자연어 질의응답
-- 게시판 정보를 컨텍스트로 활용한 정확한 답변
+- CSV 데이터를 컨텍스트로 활용한 정확한 답변
+- 고객사별 필터링 및 날짜 필터링 지원
+- 담당자 정보 조회 기능

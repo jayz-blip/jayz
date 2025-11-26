@@ -46,9 +46,8 @@ Thumbs.db
 chromedriver
 chromedriver.exe
 
-# Large data files
-*.csv
-20251125_PPM학습용데이터_*.csv
+# Large data files (CSV 파일은 포함하되, 다른 불필요한 CSV는 제외)
+# 20251125_PPM학습용데이터_*.csv 파일은 포함됨
 
 # User data and cache
 .cache/

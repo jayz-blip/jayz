@@ -1,12 +1,14 @@
 """
 Flask 웹 서버 - AI 챗봇 메인 애플리케이션
+CSV 데이터 기반으로 동작합니다.
 """
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
-from board_crawler import BoardCrawler
+from csv_loader import CSVDataLoader
 from chatbot import ChatBot
 import logging
 import config
+import os
 
 app = Flask(__name__)
 CORS(app)
@@ -15,22 +17,23 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # 전역 변수
-board_crawler = None
+csv_loader = None
 chatbot = None
 
 
 def init_services():
     """서비스 초기화"""
-    global board_crawler, chatbot
+    global csv_loader, chatbot
     
     # 설정에서 값 읽기
-    board_url = config.BOARD_URL
-    board_email = config.BOARD_EMAIL
-    board_password = config.BOARD_PASSWORD
     api_key = config.OPENAI_API_KEY
     
+    # CSV 파일 경로 설정
+    posts_csv = os.path.join(os.path.dirname(__file__), '20251125_PPM학습용데이터_원글.csv')
+    comments_csv = os.path.join(os.path.dirname(__file__), '20251125_PPM학습용데이터_댓글.csv')
+    
     # 서비스 초기화
-    board_crawler = BoardCrawler(board_url, board_email, board_password)
+    csv_loader = CSVDataLoader(posts_csv, comments_csv)
     chatbot = ChatBot(api_key)
     
     logger.info("서비스 초기화 완료")
@@ -52,86 +55,43 @@ def chat():
         if not user_message:
             return jsonify({'error': '메시지가 필요합니다.'}), 400
         
-        # 고객사 이름 추출 및 게시판 URL 확인
-        client_board_url = None
+        # 고객사 이름 추출
         client_name = None
         
-        # 먼저 PID 매핑에서 고객사 확인 (우선순위)
-        if hasattr(config, 'CLIENT_BOARD_PIDS') and config.CLIENT_BOARD_PIDS:
-            for client, pid in config.CLIENT_BOARD_PIDS.items():
-                if client in user_message:
-                    client_name = client
-                    client_board_url = config.get_board_url_by_pid(pid)
-                    logger.info(f"고객사 감지 (PID 매핑): {client_name}, PID: {pid}, 게시판 URL: {client_board_url}")
+        # CSV에서 고객사 목록 가져오기
+        if csv_loader:
+            client_names = csv_loader.get_client_names()
+            
+            # 사용자 메시지에서 고객사 이름 찾기
+            for name in client_names:
+                if name in user_message or any(word in name for word in user_message.split() if len(word) > 2):
+                    client_name = name
+                    logger.info(f"고객사 감지: {client_name}")
                     break
-        
-        # PID 매핑에 없으면 기존 URL 매핑 확인 (하위 호환성)
-        if not client_name and hasattr(config, 'CLIENT_BOARD_URLS') and config.CLIENT_BOARD_URLS:
-            for client, url in config.CLIENT_BOARD_URLS.items():
-                if client in user_message:
-                    client_name = client
-                    client_board_url = url
-                    logger.info(f"고객사 감지 (URL 매핑): {client_name}, 게시판 URL: {client_board_url}")
-                    break
-        
-        # config에 없으면 왼쪽 메뉴에서 동적으로 찾기
-        if not client_name and board_crawler:
-            try:
-                # 모든 게시판 카테고리 가져오기
-                logger.info("게시판 목록 동적 추출 시도 중...")
-                all_boards = board_crawler.get_board_categories()
-                
-                if not all_boards or len(all_boards) == 0:
-                    logger.warning("게시판 목록을 가져올 수 없습니다. config.CLIENT_BOARD_URLS에 수동으로 추가하거나, 왼쪽 메뉴 접근을 확인해주세요.")
-                else:
-                    logger.info(f"게시판 목록 {len(all_boards)}개 로드 완료")
-                    
-                    # 사용자 메시지에서 고객사 이름 찾기
-                    for board_name, board_info in all_boards.items():
-                        # 부분 매칭 (고객사 이름이 게시판 이름에 포함되거나 그 반대)
-                        if board_name in user_message or any(word in board_name for word in user_message.split() if len(word) > 2):
-                            client_name = board_name
-                            client_board_url = board_info['url']
-                            logger.info(f"고객사 감지 (동적 추출): {client_name}, 게시판 URL: {client_board_url}")
-                            break
-                    
-                    # 정확한 매칭이 없으면 GPT로 추출 시도
-                    if not client_name and all_boards:
-                        try:
-                            # 게시판 이름 목록 생성 (최대 50개만)
-                            board_names = list(all_boards.keys())[:50]
-                            client_list = ", ".join(board_names)
-                            extraction_prompt = f"""다음 메시지에서 고객사 이름을 추출해주세요. 
+            
+            # 정확한 매칭이 없으면 GPT로 추출 시도
+            if not client_name and client_names:
+                try:
+                    client_list = ", ".join(client_names[:50])  # 최대 50개만
+                    extraction_prompt = f"""다음 메시지에서 고객사 이름을 추출해주세요. 
 가능한 고객사 목록: {client_list}
 메시지: {user_message}
 고객사 이름만 답변해주세요. 없으면 "없음"이라고 답변해주세요."""
-                            
-                            extracted_name = chatbot.get_response(extraction_prompt, "")
-                            extracted_name = extracted_name.strip()
-                            
-                            # 추출된 이름이 게시판 목록에 있는지 확인
-                            if extracted_name and extracted_name != "없음":
-                                # 정확한 매칭
-                                if extracted_name in all_boards:
-                                    client_name = extracted_name
-                                    client_board_url = all_boards[extracted_name]['url']
-                                else:
-                                    # 부분 매칭 시도
-                                    for board_name in all_boards.keys():
-                                        if extracted_name in board_name or board_name in extracted_name:
-                                            client_name = board_name
-                                            client_board_url = all_boards[board_name]['url']
-                                            break
-                            
-                            if client_name:
-                                logger.info(f"고객사 감지 (GPT 추출): {client_name}, 게시판 URL: {client_board_url}")
-                        except Exception as e:
-                            logger.warning(f"GPT로 고객사 이름 추출 실패: {str(e)}")
-                        
-            except Exception as e:
-                logger.error(f"게시판 목록 동적 추출 실패: {str(e)}")
-                import traceback
-                logger.error(traceback.format_exc())
+                    
+                    extracted_name = chatbot.get_response(extraction_prompt, "")
+                    extracted_name = extracted_name.strip()
+                    
+                    # 추출된 이름이 고객사 목록에 있는지 확인
+                    if extracted_name and extracted_name != "없음":
+                        for name in client_names:
+                            if extracted_name in name or name in extracted_name:
+                                client_name = name
+                                break
+                    
+                    if client_name:
+                        logger.info(f"고객사 감지 (GPT 추출): {client_name}")
+                except Exception as e:
+                    logger.warning(f"GPT로 고객사 이름 추출 실패: {str(e)}")
         
         # 날짜 필터 감지
         date_filter = None
@@ -170,38 +130,23 @@ def chat():
         
         # 담당자 정보 추출 (담당자 문의인 경우)
         responsible_person_info = None
-        if is_contact_query and board_crawler:
+        if is_contact_query and csv_loader and client_name:
             try:
-                # 고객사 이름이나 카테고리 이름 추출 시도
-                categories = board_crawler.get_board_categories(board_url=client_board_url if client_board_url else None)
-                
-                # 사용자 메시지에서 카테고리 이름 찾기
-                matched_category = None
-                for cat_name in categories.keys():
-                    if cat_name in user_message:
-                        matched_category = cat_name
-                        break
-                
-                # 카테고리 매칭되면 해당 카테고리의 담당자 정보 가져오기
-                if matched_category:
-                    category_url = categories[matched_category]['url']
-                    responsible_person_info = board_crawler.get_recent_responsible_person(
-                        category_name=matched_category,
-                        category_url=category_url
-                    )
-                    logger.info(f"카테고리 '{matched_category}'의 담당자 정보: {responsible_person_info}")
+                responsible_person_info = csv_loader.get_responsible_person(client_name)
+                if responsible_person_info:
+                    logger.info(f"고객사 '{client_name}'의 담당자 정보: {responsible_person_info}")
             except Exception as e:
                 logger.warning(f"담당자 정보 추출 실패: {str(e)}")
         
-        # 게시판 정보 가져오기 (필요시)
+        # CSV 데이터에서 게시판 정보 가져오기
         board_context = ""
         try:
-            if board_crawler:
-                # 특정 고객사 게시판이 감지된 경우 해당 게시판 사용
-                if client_board_url:
-                    board_context = board_crawler.get_all_posts_text(limit=30, board_url=client_board_url, date_filter=date_filter)
-                else:
-                    board_context = board_crawler.get_all_posts_text(limit=20, date_filter=date_filter)
+            if csv_loader:
+                board_context = csv_loader.get_posts_text(
+                    limit=30, 
+                    client_name=client_name, 
+                    date_filter=date_filter
+                )
                 
                 if not board_context:
                     logger.warning("게시판 정보가 비어있습니다.")
@@ -230,36 +175,29 @@ def chat():
 
 @app.route('/api/refresh-board', methods=['POST'])
 def refresh_board():
-    """게시판 정보 새로고침"""
+    """CSV 데이터 새로고침"""
     try:
-        global board_crawler
+        global csv_loader
         
-        if board_crawler:
-            board_crawler.close()
+        # CSV 파일 경로 설정
+        posts_csv = os.path.join(os.path.dirname(__file__), '20251125_PPM학습용데이터_원글.csv')
+        comments_csv = os.path.join(os.path.dirname(__file__), '20251125_PPM학습용데이터_댓글.csv')
         
         # 재초기화
-        board_url = config.BOARD_URL
-        board_email = config.BOARD_EMAIL
-        board_password = config.BOARD_PASSWORD
+        csv_loader = CSVDataLoader(posts_csv, comments_csv)
         
-        board_crawler = BoardCrawler(board_url, board_email, board_password)
-        success = board_crawler.login()
+        posts_count = len(csv_loader.posts_data) if csv_loader.posts_data else 0
+        comments_count = len(csv_loader.comments_data) if csv_loader.comments_data else 0
         
-        if success:
-            posts = board_crawler.get_posts(limit=20)
-            return jsonify({
-                'success': True,
-                'message': f'{len(posts)}개의 게시글을 수집했습니다.',
-                'posts_count': len(posts)
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'message': '게시판 로그인에 실패했습니다.'
-            }), 500
+        return jsonify({
+            'success': True,
+            'message': f'CSV 데이터를 새로고침했습니다. (원글: {posts_count}개, 댓글: {comments_count}개)',
+            'posts_count': posts_count,
+            'comments_count': comments_count
+        })
             
     except Exception as e:
-        logger.error(f"게시판 새로고침 오류: {str(e)}")
+        logger.error(f"CSV 데이터 새로고침 오류: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
