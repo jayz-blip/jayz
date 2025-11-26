@@ -13,11 +13,9 @@ if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY 환경 변수가 설정되지 않았습니다. .env 파일을 확인하세요.")
 
 BOARD_URL = os.getenv('BOARD_URL', 'https://ppm.malgn.co.kr/')
-BOARD_EMAIL = os.getenv('BOARD_EMAIL')
-BOARD_PASSWORD = os.getenv('BOARD_PASSWORD')
-
-if not BOARD_EMAIL or not BOARD_PASSWORD:
-    raise ValueError("BOARD_EMAIL과 BOARD_PASSWORD 환경 변수가 설정되지 않았습니다. .env 파일을 확인하세요.")
+# CSV 기반으로 변경되어 더 이상 필요 없지만 하위 호환성을 위해 유지
+BOARD_EMAIL = os.getenv('BOARD_EMAIL', '')
+BOARD_PASSWORD = os.getenv('BOARD_PASSWORD', '')
 
 # 고객사별 게시판 PID 매핑
 CLIENT_BOARD_PIDS = {
